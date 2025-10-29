@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AEGIS Protocol - Command Hub</title>
+    
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#00ffff">
+    
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Orbitron:wght@500;700;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.css"/>
+    
+    <link rel="stylesheet" href="style.css">
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r134/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three/examples/js/controls/OrbitControls.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/vanta@latest/dist/vanta.globe.min.js"></script>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.js"></script>
+    
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+</head>
+<body>
+
+    <div id="app-background"></div>
+    <canvas id="particle-canvas"></canvas>
+
+    <div id="login-page">
+        <div class="glass-panel login-box">
+            <h1 class="font-orbitron">Inceptums</h1>
+            <p>System Access & Initialization</p>
+            
+            <div class="auth-toggle">
+                <button id="toggle-to-register" class="auth-toggle-btn active">Register</button>
+                <button id="toggle-to-login" class="auth-toggle-btn">Login</button>
+            </div>
+
+            <form id="register-form" class="auth-form active">
+                <input type="text" id="reg-name" placeholder="Name" required>
+                <input type="number" id="reg-age" placeholder="Age" required>
+                <input type="tel" id="reg-mobile" placeholder="Mobile Number" required>
+                <input type="tel" id="reg-contact" placeholder="Favorite Contact Number" required>
+                <input type="password" id="reg-password" placeholder="Password" required>
+                
+                <p id="register-error-message" class="error-message"></p>
+                <button type="submit" class="btn btn-primary">Register Account</button>
+            </form>
+            
+            <form id="login-form" class="auth-form">
+                <input type="tel" id="login-mobile" placeholder="Mobile Number" required>
+                <input type="password" id="login-password" placeholder="Password" required>
+                
+                <p id="login-error-message" class="error-message"></p>
+                <button type="submit" class="btn btn-primary">Access Dashboard</button>
+            </form>
+        </div>
+    </div>
+
+    <div id="main-dashboard" class="hidden">
+        
+        <nav class="sidebar">
+            <button data-target="system-screen" class="nav-btn logo" title="System Info">A</button>
+            <button data-target="home-dashboard" class="nav-btn active" title="Dashboard">
+                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" /></svg>
+            </button>
+            <button data-target="module1-screen" class="nav-btn" title="AI Assistant">
+                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" /></svg>
+            </button>
+            <button data-target="module2-screen" class="nav-btn" title="Emergency Hub">
+                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M18.364 5.636l-3.536 3.536m0 5.656l3.536 3.536M9.172 9.172L5.636 5.636m3.536 9.192l-3.536 3.536M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-5 0a4 4 0 11-8 0 4 4 0 018 0z" /></svg>
+            </button>
+            <button data-target="module3-globe" class="nav-btn" title="Global View">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M3.1 9a14.2 14.2 0 0110.4 0m-10.4 6a14.2 14.2 0 0010.4 0m4.5-10.9a14.3 14.3 0 01.6 10.9m0 0a14.3 14.3 0 01-.6 10.9m-9.8 1.4a14.3 14.3 0 01-.6-10.9m0 0a14.3 14.3 0 01.6-10.9" />
+                </svg>
+            </button>
+
+            <button data-target="module4-stats" class="nav-btn" title="Stats & Analytics">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" width="24" height="24">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 3v11.25A2.25 2.25 0 0 0 6 16.5h12M3.75 3.75h16.5M3.75 12h16.5m-16.5 4.5h16.5M12 16.5v4.5m-4.125-4.5v4.5m8.25-4.5v4.5M3 3h18v18H3V3z" />
+                </svg>
+            </button>
+
+            <button id="logout-btn" class="nav-btn" title="Logout">
+                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg>
+            </button>
+        </nav>
+        
+        <div id="home-dashboard">
+            <div class="home-map-container glass-panel">
+                <div id="map"></div>
+                <div id="map-controls">
+                    <div class="map-control-group"><button id="btn-theme" class="map-control-btn">🌙 Night Mode</button></div>
+                    <div class="map-control-group">
+                        <button id="btn-standard" class="map-control-btn active">Standard</button>
+                        <button id="btn-satellite" class="map-control-btn">Satellite</button>
+                        <button id="btn-radar" class="map-control-btn">Radar</button>
+                    </div>
+                    <div class="map-control-group">
+                        <button id="btn-draw-zone" class="map-control-btn">Draw Manual Zone</button>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="home-right-column">
+                <div class="glass-panel">
+                    <header class="home-header">
+                        <h1 class="font-orbitron">Dashboard</h1>
+                        <p id="dashboard-location"></p>
+                    </header>
+                    <div class="alert-box">
+                        <h2 class="font-orbitron">High Alert!</h2>
+                        <p id="alert-message">A high-risk zone is being monitored.</p>
+                    </div>
+                    <h2 class="timeline-header">Event Timeline</h2>
+                    <div id="event-timeline" class="panel-content-scrollable">
+                         </div>
+                </div>
+            </div>
+        </div>
+        
+        <div id="module1-screen" class="page glass-panel">
+            <button class="nav-back">← Back to Map</button>
+            <div id="chat-window-container">
+                <div id="chat-window">
+                     </div>
+                <form id="chat-form">
+                    <textarea id="chat-input" placeholder="Ask for safety advice..."></textarea>
+                    <button type="submit" class="btn btn-primary">Send Query</button>
+                </form>
+            </div>
+        
+            
+            <div class="chat-sidebar">
+                <h1 class="font-orbitron">AI Assistant</h1>
+                <p>Ask for safety advice, resource locations, or evacuation procedures.</p>
+                <button id="toggle-advisory-btn" class="btn btn-secondary">Show Disaster Intel</button>
+                <div id="disaster-feed-section" class="sidebar-section hidden">
+                    <h2>Current Disaster Feed</h2>
+                    <div class="video-container">
+                        <iframe src="https://www.youtube.com/embed/watch?v=A-Xp32FfC1I" frameborder="0" allowfullscreen></iframe>
+                    </div>
+                </div>
+                <div id="history-advisory-section" class="sidebar-section hidden">
+                    <h2>Historical Advisory</h2>
+                    <ul class="history-list">
+                        <li><b>Earthquake (2011):</b> Drop, Cover, and Hold On.</li>
+                        <li><b>Flood (2018):</b> Seek higher ground immediately.</li>
+                        <li><b>Wildfire (2020):</b> Evacuate if told. Keep air clean.</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <div id="module2-screen" class="page glass-panel">
+             <button class="nav-back">← Back to Map</button>
+             <h1 class="module-header font-orbitron">Module 2: Emergency Hub</h1>
+             <div class="hologram-container">
+                <div class="holo-ring ring1"></div>
+                <div class="holo-ring ring2"></div>
+                <button id="sos-button" class="sos-pulse">
+                    <span id="sos-text">SOS</span>
+                </button>
+             </div>
+        </div>
+
+        <div id="module3-globe" class="page glass-panel">
+            <button class="nav-back">← Back to Map</button>
+            <h1 class="module-header font-orbitron" style="color: var(--color-accent);">Global Command</h1>
+            <div class="globe-module-container">
+                <div id="globe-module-canvas"></div>
+                <div class="globe-module-stats glass-panel">
+                    <h2>System Status</h2>
+                    <div class="info-grid">
+                        <span>Status:</span><span style="color: var(--color-success);">All Systems Nominal</span>
+                        <span>Active Zones:</span><span>2</span>
+                        <span>Resources:</span><span>4 Deployed</span>
+                        <span>Operator:</span><span id="globe-operator-name"></span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="module4-stats" class="page glass-panel">
+            <button class="nav-back">← Back to Map</button>
+            <h1 class="module-header font-orbitron" style="color: var(--color-success);">Data & Analytics</h1>
+            <div class="stats-grid">
+                <div class="stats-chart-container">
+                    <h2>Hazard Types</h2>
+                    <div class="chart-wrapper">
+                        <canvas id="hazardChart"></canvas>
+                    </div>
+                </div>
+                <div class="stats-chart-container">
+                    <h2>Resource Availability</h2>
+                    <div class="chart-wrapper">
+                        <canvas id="resourceChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="system-screen" class="page glass-panel">
+            <button class="nav-back">← Back to Map</button>
+            <div class="system-content-wrapper">
+                <h1 class="font-orbitron">System & Profile</h1>
+                <div class="profile-section">
+                    <h2>Your Information</h2>
+                    <div class="info-grid">
+                        <span>Name:</span><span id="profile-name"></span>
+                        <span>Age:</span><span id="profile-age"></span>
+                        <span>Mobile:</span><span id="profile-mobile"></span>
+                        <span>Primary Contact:</span><span id="profile-contact"></span>
+                    </div>
+                </div>
+                 <div class="profile-section">
+                    <h2>Preparedness Checklist</h2>
+                    <ul class="checklist">
+                        <li><input type="checkbox" id="chk-kit"><label for="chk-kit">First-Aid Kit Ready</label></li>
+                        <li><input type="checkbox" id="chk-docs"><label for="chk-docs">Important Documents Secured</label></li>
+                        <li><input type="checkbox" id="chk-plan"><label for="chk-plan">Family Evacuation Plan Made</label></li>
+                    </ul>
+                </div>
+                <div class="profile-section">
+                    <h2>Manage Favorite Contacts</h2>
+                    <form id="additional-contacts-form">
+                        <input type="tel" data-contact-id="2" placeholder="Additional Contact 2" class="additional-contact">
+                        <input type="tel" data-contact-id="3" placeholder="Additional Contact 3" class="additional-contact">
+                        <input type="tel" data-contact-id="4" placeholder="Additional Contact 4" class="additional-contact">
+                        <input type="tel" data-contact-id="5" placeholder="Additional Contact 5" class="additional-contact">
+                        <input type="tel" data-contact-id="6" placeholder="Additional Contact 6" class="additional-contact">
+                    </form>
+                    <button id="save-contacts-btn" class="btn btn-primary">Save Contacts</button>
+                </div>
+            </div>
+        </div>
+
+    </div>
+    
+    <div id="alert-popup" class="hidden">
+        <audio id="alarm-sound" src="https://www.soundjay.com/buttons/beep-01a.mp3" loop></audio>
+        <div class="alert-popup-box">
+            <h1 class="font-orbitron">CRITICAL ALERT</h1>
+            <p>High-Risk Zone has reached your location. Evacuate immediately.</p>
+            <button id="stop-alert-button">Stop Alarm</button>
+        </div>
+    </div>
+
+    <script type="module" src="js/main.js"></script>
+
+    <script>
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('/sw.js')
+            .then(registration => {
+              console.log('ServiceWorker registration successful: ', registration.scope);
+            })
+            .catch(err => {
+              console.log('ServiceWorker registration failed: ', err);
+            });
+        });
+      }
+    </script>
+</body>
+</html>

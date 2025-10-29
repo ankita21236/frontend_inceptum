@@ -1,0 +1,23 @@
+{
+  "name": "AEGIS Protocol",
+  "short_name": "AEGIS",
+  "start_url": "index.html",
+  "display": "standalone",
+  "background_color": "#020a18",
+  "theme_color": "#00ffff",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "https://cdn-icons-png.flaticon.com/192.png",
+      "type": "image/png",
+      "sizes": "192x192",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "https://cdn-icons-png.flaticon.com/512.png",
+      "type": "image/png",
+      "sizes": "512x512",
+      "purpose": "any maskable"
+    }
+  ]
+}

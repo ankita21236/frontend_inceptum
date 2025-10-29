@@ -1,0 +1,1708 @@
+import { state } from './state.js';
+import { api } from './api.js';
+import { addEventToTimeline } from './ui.js';
+
+// --- SOS Button ---
+export async function handleSOS() { 
+    if (!state.userMarker) { 
+        alert("Cannot send SOS: Your location is not yet determined."); 
+        return; 
+    }
+    
+    const userLatLng = state.userMarker.getLatLng(); 
+    const coords = `${userLatLng.lat.toFixed(6)}, ${userLatLng.lng.toFixed(6)}`;
+    
+    const sosData = { 
+        userId: state.userData.mobile, 
+        info: state.userData, 
+        coordinates: { lat: userLatLng.lat, lng: userLatLng.lng } 
+    };
+    
+    // Show loading state (optional but good UX)
+    const sosButton = document.getElementById('sos-button');
+    sosButton.disabled = true;
+    sosButton.classList.remove('sos-pulse');
+    sosButton.innerHTML = `<span id="sos-text" style="font-size: 4rem;">SEND...</span>`;
+
+    const response = await api.sendSOS(sosData);
+    
+    if (response.success) {
+        const primaryContact = state.userData.contacts[0]; 
+        const otherContacts = state.userData.contacts.slice(1).filter(c => c.trim() !== "");
+        let notificationList = `\n- Nearest Rescue Teams\n- Primary Contact: ${primaryContact}`;
+        if (otherContacts.length > 0) { 
+            notificationList += `\n- Other Contacts: ${otherContacts.join(', ')}`; 
+        }
+        
+        alert(`SOS Activated for ${state.userData.name}!\n\nCoordinates: ${coords}\n\nNotifying:\n${notificationList}`);
+        
+        sosButton.style.backgroundColor = 'var(--color-success)';
+        sosButton.innerHTML = `<span id="sos-text" style="font-size: 5rem;">SENT</span>`;
+        
+        addEventToTimeline('🆘', `SOS beacon activated by ${state.userData.name}.`, 'danger');
+    } else { 
+        alert("SOS failed to send. Please check your connection."); 
+        sosButton.disabled = false;
+        sosButton.classList.add('sos-pulse');
+        sosButton.innerHTML = `<span id="sos-text">SOS</span>`;
+    }
+}
+
+// --- Save Additional Contacts ---
+export async function saveAdditionalContacts() { 
+    const newContacts = [state.userData.contacts[0]]; // Keep primary contact
+    
+    document.querySelectorAll('.additional-contact').forEach(input => { 
+        if (input.value.trim() !== "") { 
+            newContacts.push(input.value.trim()); 
+        } 
+    });
+    
+    // Update local state
+    state.userData.contacts = newContacts;
+    
+    // Update localStorage
+    const users = JSON.parse(localStorage.getItem('aegisUsers')) || {};
+    if (users[state.userData.mobile]) {
+        users[state.userData.mobile] = state.userData; // Save updated user data
+        localStorage.setItem('aegisUsers', JSON.stringify(users));
+        
+        // Mock API call
+        await api.saveContacts(state.userData.mobile, newContacts);
+        
+        alert("Additional contacts have been saved.");
+    } else {
+        alert("Error: Could not find user to save contacts.");
+    }
+}
+
+
+
+
+
+// Mock video database
+const videoDatabase = {
+    "earthquake": ["G3hfugS_6vU", "eXyVp3m5jB4"],
+    "flood": ["jyQ2At24T5I", "4ACa_g_dAO4"],
+    "safety": ["QUcatA-d2yM", "xsc-j8yqK2s"],
+    "disaster": ["xsc-j8yqK2s", "LdbS1V8vG5k"]
+};
+
+// Export the API object directly
+export const api = {
+    async registerUser(userInfo) {
+        // Mock API call
+        return new Promise(resolve => setTimeout(() => resolve({ success: true, userId: `user_${Date.now()}` }), 500));
+    },
+    async sendSOS(sosData) {
+        // Mock API call
+        console.log("SOS Data Sent to Server:", sosData);
+        return new Promise(resolve => setTimeout(() => resolve({ success: true }), 800));
+    },
+    async getAIResponse(query) {
+        // Mock AI response
+        return new Promise(resolve => {
+            setTimeout(() => {
+                let responsePoints = ["I provide general safety info. How can I help?"];
+                let videoIds = null;
+                const lowerInput = query.toLowerCase();
+
+                for (const key in videoDatabase) {
+                    if (lowerInput.includes(key)) {
+                        videoIds = videoDatabase[key];
+                        break;
+                    }
+                }
+                if (lowerInput.includes("shelter")) {
+                    responsePoints = ["Emergency shelters are at Green Park Stadium and Kanpur University."];
+                }
+                resolve({ success: true, text: responsePoints, videos: videoIds });
+            }, 1000);
+        });
+    },
+    async saveContacts(userId, contacts) {
+        // Mock API call
+        console.log(`Saving contacts for ${userId}:`, contacts);
+        return new Promise(resolve => setTimeout(() => resolve({ success: true }), 400));
+    }
+};
+
+import { state } from './state.js';
+
+// --- REGISTRATION with inline error ---
+export function handleRegister(e) {
+    e.preventDefault();
+    const errorEl = document.getElementById('register-error-message');
+    errorEl.textContent = ''; // Clear old errors
+
+    const users = JSON.parse(localStorage.getItem('aegisUsers')) || {};
+    const mobile = document.getElementById('reg-mobile').value;
+    
+    if (!mobile) {
+        errorEl.textContent = 'Mobile number is required.';
+        return;
+    }
+    if (users[mobile]) {
+        errorEl.textContent = 'User with this mobile already exists.';
+        return;
+    }
+    
+    const newUser = {
+        name: document.getElementById('reg-name').value,
+        age: document.getElementById('reg-age').value,
+        mobile: mobile,
+        contacts: [document.getElementById('reg-contact').value],
+        password: document.getElementById('reg-password').value 
+    };
+
+    if (!newUser.name || !newUser.age || !newUser.contacts[0] || !newUser.password) {
+        errorEl.textContent = 'Please fill in all fields.';
+        return;
+    }
+
+    users[mobile] = newUser;
+    localStorage.setItem('aegisUsers', JSON.stringify(users));
+    
+    alert('Registration successful! Please log in.');
+    document.getElementById('toggle-to-login').click();
+}
+
+// --- LOGIN with inline error ---
+export function handleLogin(e) {
+    e.preventDefault();
+    const errorEl = document.getElementById('login-error-message');
+    errorEl.textContent = ''; // Clear old errors
+
+    const users = JSON.parse(localStorage.getItem('aegisUsers')) || {};
+    const mobile = document.getElementById('login-mobile').value;
+    const password = document.getElementById('login-password').value;
+    const registeredUser = users[mobile];
+
+    if (registeredUser && registeredUser.password === password) {
+        // --- SUCCESS ---
+        return registeredUser; // Return the user object
+    } else {
+        // --- FAIL ---
+        errorEl.textContent = 'Invalid mobile number or password.';
+        return null; // Return null on failure
+    }
+}
+
+// --- LOGOUT ---
+export function handleLogout() {
+    location.reload(); // Simple reload to go back to login screen
+}
+
+import { api } from './api.js'; // Import the mock API
+
+// This function is only used internally, so we don't export it
+function addMessageToChat(message, sender, videoIds = null) {
+    const chatWindow = document.getElementById('chat-window');
+    const wrapper = document.createElement('div');
+    wrapper.className = `chat-msg-wrapper ${sender}`;
+    let contentHTML = '';
+
+    if (sender === 'ai') {
+        // Handle array of messages
+        const points = Array.isArray(message) ? message : [message];
+        const bulletPoints = points.map(point => `<li>${point}</li>`).join('');
+        contentHTML += `<ul class="list-disc list-inside space-y-2">${bulletPoints}</ul>`;
+        
+        if (videoIds && videoIds.length > 0) {
+            contentHTML += `<h4>Related Videos:</h4>`;
+            videoIds.forEach(videoId => {
+                contentHTML += `<div class="video-container"><iframe src="https://www.youtube.com/embed/${videoId}" frameborder="0" allowfullscreen></iframe></div>`;
+            });
+        }
+    } else {
+        contentHTML = `<p>${message}</p>`;
+    }
+    wrapper.innerHTML = `<div class="chat-msg ${sender}">${contentHTML}</div>`;
+    chatWindow.appendChild(wrapper);
+    chatWindow.scrollTop = chatWindow.scrollHeight;
+}
+
+// This function is exported to be used in main.js
+export async function handleChatSubmit(e) {
+    e.preventDefault();
+    const chatInput = document.getElementById('chat-input');
+    const userInput = chatInput.value.trim();
+    if (!userInput) return;
+
+    addMessageToChat(`<strong>Your Query:</strong><br>${userInput}`, 'user');
+    chatInput.value = '';
+
+    // --- UI/UX IMPROVEMENT ---
+    // 1. Create and add the "typing..." indicator
+    const chatWindow = document.getElementById('chat-window');
+    const typingIndicator = document.createElement('div');
+    typingIndicator.className = 'chat-msg-wrapper ai';
+    typingIndicator.id = 'typing-indicator'; // Give it an ID
+    typingIndicator.innerHTML = `<div class="chat-msg ai">AI is typing...</div>`;
+    chatWindow.appendChild(typingIndicator);
+    chatWindow.scrollTop = chatWindow.scrollHeight;
+    // -------------------------
+
+    const response = await api.getAIResponse(userInput);
+
+    // --- UI/UX IMPROVEMENT ---
+    // 2. Remove the "typing..." indicator
+    document.getElementById('typing-indicator').remove();
+    // -------------------------
+
+    if (response.success) {
+        addMessageToChat(response.text, 'ai', response.videos);
+    } else {
+        addMessageToChat(["Sorry, I'm having trouble connecting."], 'ai');
+    }
+}
+
+// Global variables for this module
+let globeModuleRenderer, globeModuleAnimatorId;
+
+export function initGlobeModule() {
+    const globeModuleContainer = document.getElementById('globe-module-canvas');
+    if (typeof THREE !== 'undefined' && !globeModuleRenderer && globeModuleContainer) {
+        try {
+            const scene = new THREE.Scene();
+            const camera = new THREE.PerspectiveCamera(40, globeModuleContainer.clientWidth / globeModuleContainer.clientHeight, 0.1, 1000); 
+            
+            globeModuleRenderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+            globeModuleRenderer.setSize(globeModuleContainer.clientWidth, globeModuleContainer.clientHeight);
+            globeModuleRenderer.setClearColor(0x000000, 0); // Transparent background
+            
+            globeModuleContainer.appendChild(globeModuleRenderer.domElement);
+
+            // --- UI/UX IMPROVEMENT: ADD ORBIT CONTROLS ---
+            const controls = new THREE.OrbitControls(camera, globeModuleRenderer.domElement);
+            controls.enableDamping = true; // Makes rotation smoother
+            controls.dampingFactor = 0.05;
+            controls.screenSpacePanning = false;
+            controls.minDistance = 2.5; // Don't let user zoom in too far
+            controls.maxDistance = 6;   // Don't let user zoom out too far
+            controls.autoRotate = true; // Keep it spinning
+            controls.autoRotateSpeed = 0.5; // Slower default spin
+            // ---------------------------------------------
+
+            // Adjusted lights for a realistic surface
+            scene.add(new THREE.AmbientLight(0x222222)); // Less ambient
+            const dirLight = new THREE.DirectionalLight(0xffffff, 1.2); // Brighter directional
+            dirLight.position.set(5, 3, 5);
+            scene.add(dirLight);
+
+            const loader = new THREE.TextureLoader();
+            
+            // --- 1. The "Real" Earth ---
+            const globeGeometry = new THREE.SphereGeometry(1.5, 64, 64);
+            const globeMaterial = new THREE.MeshPhongMaterial({
+                map: loader.load('https://raw.githubusercontent.com/tensorspace-team/tensorspace/master/assets/images/earth.png'),
+                specularMap: loader.load('https://raw.githubusercontent.com/tensorspace-team/tensorspace/master/assets/images/specular.png'),
+                specular: new THREE.Color(0x111111),
+                emissiveMap: loader.load('https://raw.githubusercontent.com/tensorspace-team/tensorspace/master/assets/images/earth_night.jpg'),
+                emissive: new THREE.Color(0xffffff),
+                emissiveIntensity: 1.0
+            });
+            
+            const globeModuleMesh = new THREE.Mesh(globeGeometry, globeMaterial); // This is the main Earth
+            
+            // Rotate to center India
+            globeModuleMesh.rotation.y = -1.34; // approx 77° E
+            globeModuleMesh.rotation.x = -0.35; // approx 20° N
+
+            scene.add(globeModuleMesh);
+
+            // --- 2. The Cloud Layer ---
+            const cloudGeometry = new THREE.SphereGeometry(1.51, 64, 64); // Slightly larger
+            const cloudMaterial = new THREE.MeshPhongMaterial({
+                map: loader.load('https://raw.githubusercontent.com/tensorspace-team/tensorspace/master/assets/images/cloud.png'),
+                transparent: true,
+                opacity: 0.25,
+                blending: THREE.AdditiveBlending
+            });
+            const globeCloudMesh = new THREE.Mesh(cloudGeometry, cloudMaterial); // Assign to global
+            scene.add(globeCloudMesh);
+
+
+            // --- 3. The Atmosphere Glow ---
+            const glowGeometry = new THREE.SphereGeometry(1.55, 64, 64); // Slightly larger
+            const glowMaterial = new THREE.ShaderMaterial({
+                uniforms: { 
+                    'c': { type: 'f', value: 0.4 }, // Softer glow
+                    'p': { type: 'f', value: 3.0 }, // Less sharp
+                },
+                vertexShader: `
+                    varying vec3 vNormal;
+                    void main() {
+                        vNormal = normalize( normalMatrix * normal );
+                        gl_Position = projectionMatrix * modelViewMatrix * vec4( position, 1.0 );
+                    }
+                `,
+                fragmentShader: `
+                    uniform float c;
+                    uniform float p;
+                    varying vec3 vNormal;
+                    void main() {
+                        float intensity = pow( c - dot( vNormal, vec3( 0.0, 0.0, 1.0 ) ), p );
+                        // Make atmosphere glow a realistic blue
+                        gl_FragColor = vec4( 0.5, 0.8, 1.0, 1.0 ) * intensity * 0.8; 
+                    }
+                `,
+                side: THREE.BackSide,
+                blending: THREE.AdditiveBlending,
+                transparent: true
+            });
+            const glowMesh = new THREE.Mesh(glowGeometry, glowMaterial);
+            scene.add(glowMesh);
+
+            camera.position.z = 3.5;
+
+            const animateModule = () => {
+                globeModuleAnimatorId = requestAnimationFrame(animateModule);
+                
+                // --- UI/UX IMPROVEMENT: UPDATE CONTROLS ---
+                controls.update(); // This is crucial for smooth controls
+
+                // We can let clouds rotate independently
+                globeCloudMesh.rotation.y += 0.0002;
+                
+                globeModuleRenderer.render(scene, camera);
+            };
+            animateModule();
+
+            // Handle window resize
+            window.addEventListener('resize', () => {
+                if(globeModuleRenderer && globeModuleContainer) { 
+                    camera.aspect = globeModuleContainer.clientWidth / globeModuleContainer.clientHeight;
+                    camera.updateProjectionMatrix();
+                    globeModuleRenderer.setSize(globeModuleContainer.clientWidth, globeModuleContainer.clientHeight);
+                }
+            });
+        } catch (e) {
+            console.error("Error initializing Globe Module:", e);
+            globeModuleContainer.innerHTML = "<p style='color: var(--color-alert);'>Error loading 3D Globe.</p>";
+        }
+    }
+}
+
+// --- Import Application State ---
+import { state } from './state.js';
+
+// --- Import Initializers ---
+import { initMap, toggleMapTheme, switchMapView } from './map.js';
+import { initGlobeModule } from './globe.js';
+import { initParticleAnimation, showPage, stopAlert, addEventToTimeline } from './ui.js';
+
+// --- Import Event Handlers ---
+import { handleRegister, handleLogin, handleLogout } from './auth.js';
+import { handleChatSubmit } from './chat.js';
+import { handleSOS, saveAdditionalContacts } from './actions.js';
+
+// NEW: Import stats module
+import { initStatsModule } from './stats.js';
+
+
+// --- Main App Initialization ---
+document.addEventListener('DOMContentLoaded', () => {
+
+    // --- Element Selections ---
+    const registerForm = document.getElementById('register-form');
+    const loginForm = document.getElementById('login-form');
+    const logoutBtn = document.getElementById('logout-btn');
+    const toggleToLogin = document.getElementById('toggle-to-login');
+    const toggleToRegister = document.getElementById('toggle-to-register');
+    const navButtons = document.querySelectorAll('.nav-btn');
+    const backButtons = document.querySelectorAll('.nav-back');
+    const chatForm = document.getElementById('chat-form');
+    const sosButton = document.getElementById('sos-button');
+    const stopAlertButton = document.getElementById('stop-alert-button');
+    const saveContactsBtn = document.getElementById('save-contacts-btn');
+    const toggleAdvisoryBtn = document.getElementById('toggle-advisory-btn');
+    const mapControlButtons = document.querySelectorAll('.map-control-btn');
+    
+    // --- Initialize Vanta.js for Login Page ---
+    if (typeof VANTA !== 'undefined') {
+        state.vantaEffect = VANTA.GLOBE({
+            el: "#login-page",
+            mouseControls: true,
+            touchControls: true,
+            gyroControls: false,
+            minHeight: 200.00,
+            minWidth: 200.00,
+            scale: 1.00,
+            scaleMobile: 1.00,
+            color: 0x00ffff,
+            color2: 0x0ea5e9,
+            backgroundColor: 0x020a18,
+            size: 1.20
+        });
+    }
+    document.body.classList.add('on-login-page');
+
+    // --- Attach Event Listeners ---
+
+    // Auth
+    registerForm.addEventListener('submit', handleRegister);
+    
+    // --- UPDATED LOGIN HANDLER ---
+    loginForm.addEventListener('submit', (e) => {
+        const user = handleLogin(e); // Get result from auth function
+        if (user) {
+            performLogin(user); // Call login logic HERE
+        }
+    });
+    
+    logoutBtn.addEventListener('click', handleLogout);
+    
+    toggleToLogin.addEventListener('click', () => {
+        toggleToLogin.classList.add('active');
+        toggleToRegister.classList.remove('active');
+        loginForm.classList.add('active');
+        registerForm.classList.remove('active');
+    });
+    toggleToRegister.addEventListener('click', () => {
+        toggleToRegister.classList.add('active');
+        toggleToLogin.classList.remove('active');
+        registerForm.classList.add('active');
+        loginForm.classList.remove('active');
+    });
+
+    // Navigation
+    navButtons.forEach(button => button.addEventListener('click', () => {
+        const targetId = button.dataset.target;
+        if (targetId) {
+            showPage(targetId);
+            
+            // NEW: Initialize stats module only when clicked
+            if (targetId === 'module4-stats') {
+                initStatsModule();
+            }
+        }
+    }));
+    backButtons.forEach(button => button.addEventListener('click', () => showPage('home-dashboard')));
+
+    // Modules & Actions
+    chatForm.addEventListener('submit', handleChatSubmit);
+    sosButton.addEventListener('click', handleSOS);
+    saveContactsBtn.addEventListener('click', saveAdditionalContacts);
+    stopAlertButton.addEventListener('click', stopAlert);
+
+    // Map Controls
+    mapControlButtons.forEach(btn => {
+        btn.addEventListener('click', () => {
+            if (btn.id === 'btn-draw-zone') { return; } // Drawing is handled in map.js
+            
+            if (btn.id === 'btn-theme') { 
+                toggleMapTheme(); 
+            } else {
+                // Handle map view switching
+                btn.parentElement.querySelectorAll('.map-control-btn').forEach(b => {
+                    if(b !== btn) b.classList.remove('active');
+                });
+                btn.classList.add('active');
+                switchMapView(btn.id);
+            }
+        });
+    });
+
+    // UI Toggles
+    toggleAdvisoryBtn.addEventListener('click', () => {
+        const disasterFeedSection = document.getElementById('disaster-feed-section');
+        const historyAdvisorySection = document.getElementById('history-advisory-section');
+        const isHidden = disasterFeedSection.classList.contains('hidden');
+        
+        disasterFeedSection.classList.toggle('hidden');
+        historyAdvisorySection.classList.toggle('hidden');
+        toggleAdvisoryBtn.textContent = isHidden ? 'Hide Disaster Intel' : 'Show Disaster Intel';
+    });
+});
+
+// --- MOVED performLogin() HERE ---
+function performLogin(loggedInUserData) {
+    state.userData = loggedInUserData; 
+    
+    // Destroy the Vanta.js animation
+    if (state.vantaEffect) {
+        state.vantaEffect.destroy();
+        state.vantaEffect = null;
+    }
+
+    // Show the main dashboard
+    document.getElementById('login-page').classList.add('hidden');
+    document.getElementById('main-dashboard').classList.remove('hidden');
+    document.body.classList.remove('on-login-page');
+
+    // Populate user data into the UI
+    document.getElementById('profile-name').textContent = state.userData.name;
+    document.getElementById('profile-age').textContent = state.userData.age;
+    document.getElementById('profile-mobile').textContent = state.userData.mobile;
+    document.getElementById('profile-contact').textContent = state.userData.contacts[0] || 'N/A';
+    document.getElementById('globe-operator-name').textContent = state.userData.name; 
+    
+    // Populate additional contacts
+    const contactInputs = document.querySelectorAll('.additional-contact');
+    state.userData.contacts.slice(1).forEach((contact, index) => {
+        if (contactInputs[index]) {
+            contactInputs[index].value = contact;
+        }
+    });
+
+    document.getElementById('dashboard-location').textContent = `Location: Kanpur, Uttar Pradesh | Operator: ${state.userData.name}`;
+    
+    // Initialize the main app components
+    initDashboard();
+    initGlobeModule();
+}
+
+// --- Dashboard Initializer (called by performLogin) ---
+function initDashboard() {
+    initMap();
+    addEventToTimeline('✅', 'Aegis Protocol Initialized.');
+    initParticleAnimation(); // Start particles AFTER login
+    
+    // We don't init stats here, we wait for the user to click the tab.
+}
+
+
+import { state } from './state.js';
+import { addEventToTimeline, triggerAlert } from './ui.js';
+
+const KANPUR_COORDS = [26.4499, 80.3319];
+let polygonDrawer; // To hold the Leaflet.Draw instance
+
+// --- Main Map Initializer ---
+export function initMap() {
+    if (state.map) return;
+    
+    state.map = L.map('map').setView(KANPUR_COORDS, 13);
+    
+    // Define Tile Layers
+    state.tileLayers.dark = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', { attribution: '&copy; CartoDB' });
+    state.tileLayers.light = L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', { attribution: '&copy; CartoDB' });
+    state.tileLayers.satellite = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { attribution: '&copy; Esri' });
+    state.tileLayers.radar = L.tileLayer('https://tilecache.rainviewer.com/v2/radar/{z}/{x}/{y}/256/{ts}/1_0.png', { ts: Math.floor(Date.now() / 1000), opacity: 0.7, attribution: 'RainViewer' });
+
+    // Set initial theme
+    state.tileLayers.dark.addTo(state.map);
+    state.map.getContainer().classList.add('dark-theme');
+    state.isNightMode = true;
+    document.getElementById('btn-theme').innerHTML = "☀️ Day Mode";
+    
+    // Locate user
+    state.map.locate({watch: true, setView: true, maxZoom: 16, enableHighAccuracy: true});
+    state.map.on('locationfound', onLocationFound);
+
+    // Add layers and markers
+    state.reportedHazards = L.layerGroup().addTo(state.map);
+    addResourceMarkers();
+
+    // Right-click to report hazard
+    state.map.on('contextmenu', function(e) { 
+        L.marker(e.latlng, { icon: L.divIcon({ className: 'text-2xl', html: '⚠️' }) })
+            .addTo(state.reportedHazards)
+            .bindPopup(`Hazard reported`)
+            .openPopup(); 
+    });
+
+    // Initial simulated disaster zone
+    const initialRedCoords = [[26.48, 80.38], [26.48, 80.42], [26.45, 80.42], [26.45, 80.38]];
+    state.redZonePolygon = L.polygon(initialRedCoords, { color: '#ef4444', fillColor: '#ef4444', fillOpacity: 0.4, weight: 1 }).addTo(state.map);
+    
+    // Start simulation
+    setInterval(simulateDisaster, 4000);
+
+    // Init Leaflet.draw
+    initDrawing();
+}
+
+// --- Map Helper Functions ---
+
+function onLocationFound(e) {
+    if (!state.userMarker) {
+        // Create user marker
+        state.userMarker = L.marker(e.latlng, { 
+            icon: L.divIcon({ 
+                className: 'user-marker', 
+                html: '<div></div>', 
+                iconSize: [16, 16] 
+            }) 
+        }).addTo(state.map);
+        
+        // Add CSS for the marker pulse
+        const style = document.createElement('style');
+        style.innerHTML = `
+            .user-marker div { 
+                width: 16px; height: 16px; background: var(--color-accent); 
+                border-radius: 50%; border: 2px solid white; 
+                box-shadow: 0 0 10px var(--color-accent); 
+                animation: pulse-user 1.5s infinite; 
+            } 
+            @keyframes pulse-user { 
+                0% { transform: scale(1); opacity: 1; } 
+                50% { transform: scale(1.5); opacity: 0.5; } 
+                100% { transform: scale(1); opacity: 1; } 
+            }`;
+        if(!document.head.querySelector('.user-marker-style')) {
+             style.className = 'user-marker-style';
+             document.head.appendChild(style);
+        }
+    } else {
+        // Update marker position
+        state.userMarker.setLatLng(e.latlng); 
+    }
+}
+
+function addResourceMarkers() {
+    const resources = [ 
+        { name: 'Regency Hospital', coords: [26.4748, 80.3421], icon: '🏥' }, 
+        { name: 'GSVM Medical College', coords: [26.4589, 80.3061], icon: '🏥' }, 
+        { name: 'Green Park Stadium (Shelter)', coords: [26.4715, 80.3499], icon: '🏠' }, 
+        { name: 'Kanpur Central (Police Post)', coords: [26.4533, 80.3516], icon: '👮' } 
+    ];
+    resources.forEach(res => { 
+        L.marker(res.coords, { icon: L.divIcon({ className: 'text-2xl', html: res.icon }) })
+            .addTo(state.map)
+            .bindPopup(res.name); 
+    });
+}
+
+export function toggleMapTheme() {
+    state.isNightMode = !state.isNightMode;
+    const themeBtn = document.getElementById('btn-theme');
+    if (state.isNightMode) {
+        if (state.map.hasLayer(state.tileLayers.light)) state.map.removeLayer(state.tileLayers.light);
+        if (!state.map.hasLayer(state.tileLayers.dark)) state.tileLayers.dark.addTo(state.map);
+        themeBtn.innerHTML = "☀️ Day Mode";
+    } else {
+        if (state.map.hasLayer(state.tileLayers.dark)) state.map.removeLayer(state.tileLayers.dark);
+        if (!state.map.hasLayer(state.tileLayers.light)) state.tileLayers.light.addTo(state.map);
+        themeBtn.innerHTML = "🌙 Night Mode";
+    }
+}
+
+export function switchMapView(viewId) {
+    if (state.map.hasLayer(state.tileLayers.satellite)) state.map.removeLayer(state.tileLayers.satellite);
+    if (state.map.hasLayer(state.tileLayers.radar)) state.map.removeLayer(state.tileLayers.radar);
+    
+    if (viewId === 'btn-satellite') { 
+        state.tileLayers.satellite.addTo(state.map); 
+    } else if (viewId === 'btn-radar') {
+        state.tileLayers.radar.options.ts = Math.floor(Date.now() / 1000);
+        state.tileLayers.radar.addTo(state.map);
+    }
+    addEventToTimeline('🗺️', `Map view switched to ${viewId.replace('btn-', '')}.`, 'info');
+}
+
+function simulateDisaster() {
+    if (!state.redZonePolygon || !state.userMarker) return;
+    
+    // Expand the simulated zone
+    const currentCoords = state.redZonePolygon.getLatLngs()[0];
+    const newCoords = currentCoords.map(coord => ({ lat: coord.lat - 0.002, lng: coord.lng - 0.004 }));
+    state.redZonePolygon.setLatLngs(newCoords);
+    if (Math.random() > 0.8) { 
+        addEventToTimeline('📈', 'Danger zone has expanded.', 'warning'); 
+    }
+    
+    // Check user location against zones
+    const userLatLng = state.userMarker.getLatLng();
+    const inSimZone = state.redZonePolygon.getBounds().contains(userLatLng);
+    
+    let inManualZone = false;
+    if (state.manualRedZone && typeof state.manualRedZone.getBounds === 'function' && state.manualRedZone.getBounds().contains(userLatLng)) {
+       inManualZone = true;
+    }
+
+    // Trigger alert if in a zone and alert is not already showing
+    if ((inSimZone || inManualZone) && document.getElementById('alert-popup').classList.contains('hidden')) { 
+        triggerAlert(); 
+    }
+}
+
+function initDrawing() {
+    const btnDrawZone = document.getElementById('btn-draw-zone'); 
+    if (typeof L.Draw !== 'undefined') {
+        polygonDrawer = new L.Draw.Polygon(state.map, {
+            shapeOptions: { color: '#f74040', fillColor: '#f74040', fillOpacity: 0.4 },
+            showArea: false 
+        });
+        
+        btnDrawZone.addEventListener('click', () => {
+            polygonDrawer.enable();
+            btnDrawZone.textContent = 'Drawing...';
+            btnDrawZone.classList.add('active');
+        });
+
+        state.map.on(L.Draw.Event.CREATED, function (e) {
+            const layer = e.layer;
+            if (state.manualRedZone) { state.map.removeLayer(state.manualRedZone); }
+            state.manualRedZone = layer;
+            state.manualRedZone.setStyle({ color: '#f74040', fillColor: '#f74040', fillOpacity: 0.4, weight: 1 });
+            state.map.addLayer(state.manualRedZone);
+            addEventToTimeline('✏️', 'Manual danger zone created.', 'warn');
+            btnDrawZone.textContent = 'Draw Manual Zone';
+            btnDrawZone.classList.remove('active');
+        });
+
+        state.map.on('draw:drawstop', function () {
+            polygonDrawer.disable();
+            btnDrawZone.textContent = 'Draw Manual Zone';
+            btnDrawZone.classList.remove('active');
+        });
+    } else {
+        console.error("Leaflet.draw library not loaded correctly!");
+        btnDrawZone.disabled = true;
+        btnDrawZone.textContent = 'Draw Unavailable';
+    }
+}
+
+
+// This object holds all shared data for the application.
+// Other modules will import this to read or write state.
+export const state = {
+    // Map State
+    map: null,
+    userMarker: null,
+    redZonePolygon: null,
+    manualRedZone: null,
+    tileLayers: {},
+    isNightMode: false,
+    reportedHazards: null,
+    
+    // User State
+    userData: {}, // Will be populated on login
+    
+    // UI State
+    vantaEffect: null // Holds the login page Vanta.js instance
+};
+
+
+
+let hazardChart = null;
+let resourceChart = null;
+
+// Mock data for the charts
+const hazardData = {
+    labels: ['Floods', 'Wildfires', 'Earthquakes', 'Storms'],
+    datasets: [{
+        label: 'Reported Incidents',
+        data: [12, 5, 2, 8],
+        backgroundColor: [
+            'rgba(0, 150, 255, 0.7)',
+            'rgba(255, 159, 64, 0.7)',
+            'rgba(153, 102, 255, 0.7)',
+            'rgba(75, 192, 192, 0.7)'
+        ],
+        borderColor: 'rgba(230, 241, 255, 0.5)',
+        borderWidth: 1
+    }]
+};
+
+const resourceData = {
+    labels: ['Shelters', 'Medical Teams', 'Police Units', 'Food Supplies'],
+    datasets: [{
+        label: 'Capacity / Availability %',
+        data: [65, 80, 75, 45],
+        backgroundColor: 'rgba(0, 255, 255, 0.2)',
+        borderColor: 'rgba(0, 255, 255, 1)',
+        borderWidth: 2,
+        pointBackgroundColor: 'rgba(0, 255, 255, 1)',
+        pointBorderColor: '#fff',
+        pointHoverBackgroundColor: '#fff',
+        pointHoverBorderColor: 'rgba(0, 255, 255, 1)'
+    }]
+};
+
+export function initStatsModule() {
+    // Check if Chart.js is loaded
+    if (typeof Chart === 'undefined') {
+        console.error('Chart.js is not loaded!');
+        return;
+    }
+
+    const hazardCtx = document.getElementById('hazardChart');
+    if (hazardCtx && !hazardChart) {
+        hazardChart = new Chart(hazardCtx, {
+            type: 'doughnut',
+            data: hazardData,
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        position: 'top',
+                        labels: {
+                            color: 'var(--color-text-primary)'
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+    const resourceCtx = document.getElementById('resourceChart');
+    if (resourceCtx && !resourceChart) {
+        resourceChart = new Chart(resourceCtx, {
+            type: 'radar',
+            data: resourceData,
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    r: {
+                        angleLines: { color: 'rgba(255, 255, 255, 0.2)' },
+                        grid: { color: 'rgba(255, 255, 255, 0.2)' },
+                        pointLabels: {
+                            color: 'var(--color-text-primary)',
+                            font: {
+                                family: 'Inter, sans-serif'
+                            }
+                        },
+                        ticks: {
+                            color: 'var(--color-text-primary)',
+                            backdropColor: 'var(--color-bg-dark)'
+                        }
+                    }
+                },
+                plugins: {
+                    legend: {
+                        display: false
+                    }
+                }
+            }
+        });
+    }
+}
+
+
+
+// --- Page Navigation ---
+export function showPage(targetId) {
+    const pages = document.querySelectorAll('.page');
+    const homeDashboard = document.getElementById('home-dashboard');
+    const navButtons = document.querySelectorAll('.nav-btn');
+
+    pages.forEach(page => page.classList.remove('active'));
+    
+    if (targetId === 'home-dashboard') { 
+        homeDashboard.style.display = 'grid'; 
+    } else {
+        homeDashboard.style.display = 'none';
+        const targetPage = document.getElementById(targetId);
+        if (targetPage) targetPage.classList.add('active');
+    }
+    
+    // Update active nav button
+    navButtons.forEach(btn => btn.classList.remove('active'));
+    const activeBtn = document.querySelector(`.nav-btn[data-target="${targetId}"]`);
+    if(activeBtn) activeBtn.classList.add('active');
+}
+
+// --- Event Timeline ---
+export function addEventToTimeline(icon, text, type = 'info') {
+    const eventTimeline = document.getElementById('event-timeline');
+    const item = document.createElement('div');
+    item.className = 'timeline-item';
+    
+    let iconColor = 'var(--color-success)';
+    if (type === 'warning') iconColor = 'var(--color-warn)';
+    if (type === 'danger') iconColor = 'var(--color-alert)';
+    if (type === 'info') iconColor = 'var(--color-accent)';
+    
+    const time = new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    
+    item.innerHTML = `
+        <div class="timeline-icon" style="color: ${iconColor};">${icon}</div>
+        <div class="timeline-content">
+            <p>${text}</p>
+            <div class="time">${time}</div>
+        </div>`;
+    eventTimeline.prepend(item);
+}
+
+// --- Alert System ---
+export function triggerAlert() {
+    const alertPopup = document.getElementById('alert-popup');
+    const alarmSound = document.getElementById('alarm-sound');
+    
+    alertPopup.classList.remove('hidden');
+    alarmSound.play().catch(e => console.error("Error playing sound:", e));
+    if ('vibrate' in navigator) navigator.vibrate([500, 200, 500]);
+    
+    addEventToTimeline('🚨', 'CRITICAL ALERT: User location is now in high-risk zone!', 'danger');
+    
+    // Also show the disaster intel
+    document.getElementById('disaster-feed-section').classList.remove('hidden');
+    document.getElementById('history-advisory-section').classList.remove('hidden');
+    document.getElementById('toggle-advisory-btn').textContent = 'Hide Disaster Intel';
+}
+
+export function stopAlert() {
+    const alertPopup = document.getElementById('alert-popup');
+    const alarmSound = document.getElementById('alarm-sound');
+
+    alertPopup.classList.add('hidden');
+    alarmSound.pause(); 
+    alarmSound.currentTime = 0;
+    if ('vibrate' in navigator) navigator.vibrate(0);
+}
+
+// --- Particle Background ---
+export function initParticleAnimation() { 
+    const canvas = document.getElementById('particle-canvas'); 
+    if (!canvas) return; 
+    const ctx = canvas.getContext('2d');
+    canvas.width = window.innerWidth; 
+    canvas.height = window.innerHeight; 
+    let particlesArray = []; 
+    
+    class Particle { 
+        constructor(x, y, dirX, dirY, size) { 
+            this.x = x; this.y = y; this.dirX = dirX; this.dirY = dirY; this.size = size; 
+        } 
+        draw() { 
+            ctx.beginPath(); 
+            ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2, false); 
+            ctx.fillStyle = 'rgba(100, 150, 255, 0.2)'; 
+            ctx.fill(); 
+        } 
+        update() { 
+            if (this.x > canvas.width || this.x < 0) { this.dirX = -this.dirX; } 
+            if (this.y > canvas.height || this.y < 0) { this.dirY = -this.dirY; } 
+            this.x += this.dirX; this.y += this.dirY; 
+            this.draw(); 
+        } 
+    }
+    
+    function init() { 
+        particlesArray = []; 
+        let num = (canvas.height * canvas.width) / 9000; 
+        for (let i = 0; i < num; i++) { 
+            let size = (Math.random() * 2) + 1; 
+            let x = (Math.random() * (innerWidth - size * 2)); 
+            let y = (Math.random() * (innerHeight - size * 2)); 
+            let dirX = (Math.random() * 0.4) - 0.2; 
+            let dirY = (Math.random() * 0.4) - 0.2; 
+            particlesArray.push(new Particle(x, y, dirX, dirY, size)); 
+        } 
+    }
+    
+    function animate() { 
+        requestAnimationFrame(animate); 
+        ctx.clearRect(0,0,innerWidth, innerHeight); 
+        particlesArray.forEach(p => p.update()); 
+    }
+    
+    window.addEventListener('resize', () => { 
+        canvas.width = innerWidth; 
+        canvas.height = innerHeight; 
+        init(); 
+    }); 
+    
+    init(); 
+    animate();
+}
+
+
+these are files in js named as actions.js,api.js,auth.js,chat.js,globe.js,main.js,map.js,state.js,stats.js,ui.js
+
+now index.html
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AEGIS Protocol - Command Hub</title>
+    
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#00ffff">
+    
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Orbitron:wght@500;700;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.css"/>
+    
+    <link rel="stylesheet" href="style.css">
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r134/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three/examples/js/controls/OrbitControls.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/vanta@latest/dist/vanta.globe.min.js"></script>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.js"></script>
+    
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+</head>
+<body>
+
+    <div id="app-background"></div>
+    <canvas id="particle-canvas"></canvas>
+
+    <div id="login-page">
+        <div class="glass-panel login-box">
+            <h1 class="font-orbitron">Inceptums</h1>
+            <p>System Access & Initialization</p>
+            
+            <div class="auth-toggle">
+                <button id="toggle-to-register" class="auth-toggle-btn active">Register</button>
+                <button id="toggle-to-login" class="auth-toggle-btn">Login</button>
+            </div>
+
+            <form id="register-form" class="auth-form active">
+                <input type="text" id="reg-name" placeholder="Name" required>
+                <input type="number" id="reg-age" placeholder="Age" required>
+                <input type="tel" id="reg-mobile" placeholder="Mobile Number" required>
+                <input type="tel" id="reg-contact" placeholder="Favorite Contact Number" required>
+                <input type="password" id="reg-password" placeholder="Password" required>
+                
+                <p id="register-error-message" class="error-message"></p>
+                <button type="submit" class="btn btn-primary">Register Account</button>
+            </form>
+            
+            <form id="login-form" class="auth-form">
+                <input type="tel" id="login-mobile" placeholder="Mobile Number" required>
+                <input type="password" id="login-password" placeholder="Password" required>
+                
+                <p id="login-error-message" class="error-message"></p>
+                <button type="submit" class="btn btn-primary">Access Dashboard</button>
+            </form>
+        </div>
+    </div>
+
+    <div id="main-dashboard" class="hidden">
+        
+        <nav class="sidebar">
+            <button data-target="system-screen" class="nav-btn logo" title="System Info">A</button>
+            <button data-target="home-dashboard" class="nav-btn active" title="Dashboard">
+                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" /></svg>
+            </button>
+            <button data-target="module1-screen" class="nav-btn" title="AI Assistant">
+                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" /></svg>
+            </button>
+            <button data-target="module2-screen" class="nav-btn" title="Emergency Hub">
+                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M18.364 5.636l-3.536 3.536m0 5.656l3.536 3.536M9.172 9.172L5.636 5.636m3.536 9.192l-3.536 3.536M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-5 0a4 4 0 11-8 0 4 4 0 018 0z" /></svg>
+            </button>
+            <button data-target="module3-globe" class="nav-btn" title="Global View">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M3.1 9a14.2 14.2 0 0110.4 0m-10.4 6a14.2 14.2 0 0010.4 0m4.5-10.9a14.3 14.3 0 01.6 10.9m0 0a14.3 14.3 0 01-.6 10.9m-9.8 1.4a14.3 14.3 0 01-.6-10.9m0 0a14.3 14.3 0 01.6-10.9" />
+                </svg>
+            </button>
+
+            <button data-target="module4-stats" class="nav-btn" title="Stats & Analytics">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" width="24" height="24">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 3v11.25A2.25 2.25 0 0 0 6 16.5h12M3.75 3.75h16.5M3.75 12h16.5m-16.5 4.5h16.5M12 16.5v4.5m-4.125-4.5v4.5m8.25-4.5v4.5M3 3h18v18H3V3z" />
+                </svg>
+            </button>
+
+            <button id="logout-btn" class="nav-btn" title="Logout">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg>
+            </button>
+        </nav>
+        
+        <div id="home-dashboard">
+            <div class="home-map-container glass-panel">
+                <div id="map"></div>
+                <div id="map-controls">
+                    <div class="map-control-group"><button id="btn-theme" class="map-control-btn">🌙 Night Mode</button></div>
+                    <div class="map-control-group">
+                        <button id="btn-standard" class="map-control-btn active">Standard</button>
+                        <button id="btn-satellite" class="map-control-btn">Satellite</button>
+                        <button id="btn-radar" class="map-control-btn">Radar</button>
+                    </div>
+                    <div class="map-control-group">
+                        <button id="btn-draw-zone" class="map-control-btn">Draw Manual Zone</button>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="home-right-column">
+                <div class="glass-panel">
+                    <header class="home-header">
+                        <h1 class="font-orbitron">Dashboard</h1>
+                        <p id="dashboard-location"></p>
+                    </header>
+                    <div class="alert-box">
+                        <h2 class="font-orbitron">High Alert!</h2>
+                        <p id="alert-message">A high-risk zone is being monitored.</p>
+                    </div>
+                    <h2 class="timeline-header">Event Timeline</h2>
+                    <div id="event-timeline" class="panel-content-scrollable">
+                         </div>
+                </div>
+            </div>
+        </div>
+        
+        <div id="module1-screen" class="page glass-panel">
+            <button class="nav-back">← Back to Map</button>
+            <div id="chat-window-container">
+                <div id="chat-window">
+                     </div>
+                <form id="chat-form">
+                    <textarea id="chat-input" placeholder="Ask for safety advice..."></textarea>
+                    <button type="submit" class="btn btn-primary">Send Query</button>
+                </form>
+            </div>
+        
+            
+            <div class="chat-sidebar">
+                <h1 class="font-orbitron">AI Assistant</h1>
+                <p>Ask for safety advice, resource locations, or evacuation procedures.</p>
+                <button id="toggle-advisory-btn" class="btn btn-secondary">Show Disaster Intel</button>
+                <div id="disaster-feed-section" class="sidebar-section hidden">
+                    <h2>Current Disaster Feed</h2>
+                    <div class="video-container">
+                        <iframe src="https://www.youtube.com/embed/watch?v=A-Xp32FfC1I" frameborder="0" allowfullscreen></iframe>
+                    </div>
+                </div>
+                <div id="history-advisory-section" class="sidebar-section hidden">
+                    <h2>Historical Advisory</h2>
+                    <ul class="history-list">
+                        <li><b>Earthquake (2011):</b> Drop, Cover, and Hold On.</li>
+                        <li><b>Flood (2018):</b> Seek higher ground immediately.</li>
+                        <li><b>Wildfire (2020):</b> Evacuate if told. Keep air clean.</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <div id="module2-screen" class="page glass-panel">
+             <button class="nav-back">← Back to Map</button>
+             <h1 class="module-header font-orbitron">Module 2: Emergency Hub</h1>
+             <div class="hologram-container">
+                <div class="holo-ring ring1"></div>
+                <div class="holo-ring ring2"></div>
+                <button id="sos-button" class="sos-pulse">
+                    <span id="sos-text">SOS</span>
+                </button>
+             </div>
+        </div>
+
+        <div id="module3-globe" class="page glass-panel">
+            <button class="nav-back">← Back to Map</button>
+            <h1 class="module-header font-orbitron" style="color: var(--color-accent);">Global Command</h1>
+            <div class="globe-module-container">
+                <div id="globe-module-canvas"></div>
+                <div class="globe-module-stats glass-panel">
+                    <h2>System Status</h2>
+                    <div class="info-grid">
+                        <span>Status:</span><span style="color: var(--color-success);">All Systems Nominal</span>
+                        <span>Active Zones:</span><span>2</span>
+                        <span>Resources:</span><span>4 Deployed</span>
+                        <span>Operator:</span><span id="globe-operator-name"></span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="module4-stats" class="page glass-panel">
+            <button class="nav-back">← Back to Map</button>
+            <h1 class="module-header font-orbitron" style="color: var(--color-success);">Data & Analytics</h1>
+            <div class="stats-grid">
+                <div class="stats-chart-container">
+                    <h2>Hazard Types</h2>
+                    <div class="chart-wrapper">
+                        <canvas id="hazardChart"></canvas>
+                    </div>
+                </div>
+                <div class="stats-chart-container">
+                    <h2>Resource Availability</h2>
+                    <div class="chart-wrapper">
+                        <canvas id="resourceChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="system-screen" class="page glass-panel">
+            <button class="nav-back">← Back to Map</button>
+            <div class="system-content-wrapper">
+                <h1 class="font-orbitron">System & Profile</h1>
+                <div class="profile-section">
+                    <h2>Your Information</h2>
+                    <div class="info-grid">
+                        <span>Name:</span><span id="profile-name"></span>
+                        <span>Age:</span><span id="profile-age"></span>
+                        <span>Mobile:</span><span id="profile-mobile"></span>
+                        <span>Primary Contact:</span><span id="profile-contact"></span>
+                    </div>
+                </div>
+                 <div class="profile-section">
+                    <h2>Preparedness Checklist</h2>
+                    <ul class="checklist">
+                        <li><input type="checkbox" id="chk-kit"><label for="chk-kit">First-Aid Kit Ready</label></li>
+                        <li><input type="checkbox" id="chk-docs"><label for="chk-docs">Important Documents Secured</label></li>
+                        <li><input type="checkbox" id="chk-plan"><label for="chk-plan">Family Evacuation Plan Made</label></li>
+                    </ul>
+                </div>
+                <div class="profile-section">
+                    <h2>Manage Favorite Contacts</h2>
+                    <form id="additional-contacts-form">
+                        <input type="tel" data-contact-id="2" placeholder="Additional Contact 2" class="additional-contact">
+                        <input type="tel" data-contact-id="3" placeholder="Additional Contact 3" class="additional-contact">
+                        <input type="tel" data-contact-id="4" placeholder="Additional Contact 4" class="additional-contact">
+                        <input type="tel" data-contact-id="5" placeholder="Additional Contact 5" class="additional-contact">
+                        <input type="tel" data-contact-id="6" placeholder="Additional Contact 6" class="additional-contact">
+                    </form>
+                    <button id="save-contacts-btn" class="btn btn-primary">Save Contacts</button>
+                </div>
+            </div>
+        </div>
+
+    </div>
+    
+    <div id="alert-popup" class="hidden">
+        <audio id="alarm-sound" src="https://www.soundjay.com/buttons/beep-01a.mp3" loop></audio>
+        <div class="alert-popup-box">
+            <h1 class="font-orbitron">CRITICAL ALERT</h1>
+            <p>High-Risk Zone has reached your location. Evacuate immediately.</p>
+            <button id="stop-alert-button">Stop Alarm</button>
+        </div>
+    </div>
+
+    <script type="module" src="js/main.js"></script>
+
+    <script>
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('/sw.js')
+            .then(registration => {
+              console.log('ServiceWorker registration successful: ', registration.scope);
+            })
+            .catch(err => {
+              console.log('ServiceWorker registration failed: ', err);
+            });
+        });
+      }
+    </script>
+</body>
+</html>
+
+manifest.json
+{
+  "name": "AEGIS Protocol",
+  "short_name": "AEGIS",
+  "start_url": "index.html",
+  "display": "standalone",
+  "background_color": "#020a18",
+  "theme_color": "#00ffff",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "https.cdn-icons-png.flaticon.com/192.png",
+      "type": "image/png",
+      "sizes": "192x192",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "https.cdn-icons-png.flaticon.com/512.png",
+      "type": "image/png",
+      "sizes": "512x512",
+      "purpose": "any maskable"
+    }
+  ]
+}
+
+style.css
+/* === CSS Custom Properties === */
+:root {
+    --font-heading: 'Orbitron', sans-serif;
+    --font-body: 'Inter', sans-serif;
+    --color-bg-dark: #020a18;
+    --color-bg-grid: rgba(0, 150, 255, 0.07);
+    --color-text-primary: #e6f1ff;
+    --color-text-secondary: #a8b2d1;
+    --color-text-dim: #737d9c;
+    --color-accent: #00ffff;
+    --color-accent-glow: rgba(0, 255, 255, 0.2);
+    --color-accent-dark: #0ea5e9;
+    --color-alert: #f74040;
+    --color-alert-glow: rgba(247, 64, 64, 0.3);
+    --color-success: #39ff14;
+    --color-warn: #ffca3a;
+    --panel-bg: rgba(10, 25, 47, 0.75);
+    --panel-blur: blur(12px);
+    --panel-border: 1px solid rgba(0, 255, 255, 0.25);
+    --panel-shadow: 0 0 25px rgba(0, 255, 255, 0.1);
+}
+
+/* === Base & Background Styles === */
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body {
+    width: 100vw; height: 100vh; font-family: var(--font-body);
+    background-color: var(--color-bg-dark); color: var(--color-text-primary); overflow: hidden;
+}
+#app-background {
+    position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+    background-image: linear-gradient(var(--color-bg-grid) 1px, transparent 1px),
+                        linear-gradient(90deg, var(--color-bg-grid) 1px, transparent 1px);
+    background-size: 30px 30px; animation: pan-grid 60s linear infinite; z-index: -2;
+}
+
+/* Hide default grid/particles on the login page */
+.on-login-page #app-background,
+.on-login-page #particle-canvas {
+    display: none;
+}
+@keyframes pan-grid { from { background-position: 0 0; } to { background-position: 300px 300px; } }
+
+#particle-canvas { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: -1; opacity: 0.5; }
+
+/* === Typography === */
+.font-orbitron { font-family: var(--font-heading); }
+h1, h2, h3, h4, h5 { font-family: var(--font-heading); color: var(--color-accent); letter-spacing: 1px; }
+
+/* === Glass Panel Style === */
+.glass-panel {
+    background: var(--panel-bg); backdrop-filter: var(--panel-blur); border: var(--panel-border);
+    border-radius: 12px; box-shadow: var(--panel-shadow); padding: 1.5rem;
+}
+
+/* === Form & Button Styles === */
+input[type="text"], input[type="number"], input[type="tel"], input[type="password"], textarea {
+    width: 100%; background: rgba(0, 0, 0, 0.3); border: 1px solid var(--color-text-dim);
+    border-radius: 8px; padding: 0.75rem; color: var(--color-text-primary); font-size: 1rem;
+    transition: all 0.2s ease; margin-bottom: 1rem;
+}
+input:focus, textarea:focus { outline: none; border-color: var(--color-accent); box-shadow: 0 0 15px var(--color-accent-glow); }
+.btn {
+    width: 100%; border: none; border-radius: 8px; padding: 0.75rem 1rem; font-family: var(--font-heading);
+    font-weight: 700; font-size: 1rem; cursor: pointer; transition: all 0.2s ease; text-transform: uppercase;
+}
+.btn-primary { background-color: var(--color-accent-dark); color: var(--color-text-primary); margin-top: 1.5rem; }
+.btn-primary:hover { background-color: var(--color-accent); color: var(--color-bg-dark); box-shadow: 0 0 20px var(--color-accent-glow); }
+.btn-secondary { background-color: transparent; border: 1px solid var(--color-accent-dark); color: var(--color-accent-dark); }
+.btn-secondary:hover { background-color: var(--color-accent-dark); color: var(--color-text-primary); }
+
+/* === NEW: Form Error Message Style === */
+.error-message {
+    color: var(--color-alert);
+    text-align: center;
+    height: 1rem;
+    font-size: 0.9rem;
+    margin-bottom: 0.5rem;
+}
+
+/* === Login Page === */
+#login-page {
+    height: 100vh;
+    width: 100vw;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1rem;
+    position: relative; 
+    overflow: hidden;
+    /* Vanta.js will attach to this element */
+}
+
+.login-box {
+    width: 100%;
+    max-width: 420px;
+    position: relative;
+    z-index: 10;
+}
+.login-box h1 { font-size: 2.25rem; text-align: center; margin-bottom: 0.5rem; }
+.login-box p { text-align: center; color: var(--color-text-secondary); margin-bottom: 2rem; }
+
+/* Auth Toggle Buttons */
+.auth-toggle {
+    display: flex;
+    border-bottom: 1px solid var(--color-accent-glow);
+    margin-bottom: 1.5rem;
+}
+.auth-toggle-btn {
+    flex: 1;
+    background: none;
+    border: none;
+    color: var(--color-text-dim);
+    padding: 0.75rem;
+    font-family: var(--font-heading);
+    font-size: 1rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+.auth-toggle-btn.active {
+    color: var(--color-accent);
+    border-bottom: 2px solid var(--color-accent);
+    box-shadow: 0 5px 15px var(--color-accent-glow);
+}
+.auth-form {
+    display: none; /* Hidden by default */
+}
+.auth-form.active {
+    display: block; /* Shown when active */
+}
+
+
+/* === Main Dashboard Layout === */
+#main-dashboard { display: flex; height: 100vh; }
+.hidden { display: none !important; }
+
+/* === Sidebar Navigation === */
+.sidebar {
+    width: 80px; background: var(--panel-bg); backdrop-filter: var(--panel-blur); border-right: var(--panel-border);
+    box-shadow: var(--panel-shadow); display: flex; flex-direction: column; align-items: center;
+    padding: 1.5rem 0; gap: 1rem; z-index: 30;
+}
+.nav-btn {
+    padding: 0.75rem; border-radius: 8px; color: var(--color-text-dim); transition: all 0.2s ease;
+    text-decoration: none; background: none; border: none; cursor: pointer;
+}
+.nav-btn.logo {
+    font-family: var(--font-heading); font-weight: 900; font-size: 2rem; color: var(--color-accent); line-height: 1;
+}
+.nav-btn.logo:hover { transform: scale(1.1); text-shadow: 0 0 15px var(--color-accent); }
+.nav-btn.active, .nav-btn:hover { background-color: var(--color-accent-dark); color: var(--color-text-primary); box-shadow: 0 0 15px var(--color-accent-glow); }
+.nav-btn svg { width: 24px; height: 24px; }
+
+/* Logout Button */
+#logout-btn {
+    margin-top: auto; /* Pushes to the bottom */
+}
+
+/* === Home Dashboard Screen === */
+#home-dashboard { flex: 1; display: grid; grid-template-columns: 2fr 1fr; gap: 1.5rem; padding: 1.5rem; height: 100vh; overflow: hidden; }
+.home-map-container { position: relative; border-radius: 12px; overflow: hidden; border: var(--panel-border); }
+#map { height: 100%; width: 100%; z-index: 1; }
+.home-right-column { height: 100%; display: flex; flex-direction: column; gap: 1.5rem; }
+.home-right-column .glass-panel { flex-grow: 1; display: flex; flex-direction: column; overflow: hidden; }
+.panel-content-scrollable { overflow-y: auto; flex-grow: 1; padding-right: 0.5rem; }
+.home-header h1 { font-size: 2rem; margin-bottom: 0.25rem; }
+.home-header p { color: var(--color-text-secondary); margin-bottom: 1.5rem; }
+.alert-box { background: rgba(239, 68, 68, 0.15); border: 1px solid var(--color-alert); border-radius: 8px; padding: 1rem; margin-bottom: 1.5rem; }
+.alert-box h2 { color: var(--color-alert); font-size: 1.1rem; }
+.alert-box p { color: var(--color-text-primary); font-size: 0.9rem; }
+.timeline-header { font-size: 1.25rem; color: var(--color-accent); margin-bottom: 1rem; padding-bottom: 0.5rem; border-bottom: 1px solid var(--color-accent-glow); }
+
+/* Map Controls */
+#map-controls { position: absolute; top: 1rem; right: 1rem; z-index: 401; display: flex; flex-direction: column; gap: 0.5rem; }
+.map-control-group { background: var(--panel-bg); backdrop-filter: var(--panel-blur); border: 1px solid var(--color-accent-glow); border-radius: 8px; overflow: hidden; }
+.map-control-btn { padding: 6px 12px; background: none; border: none; color: var(--color-text-secondary); font-size: 0.8rem; font-weight: 500; cursor: pointer; width: 100%; text-align: left; border-bottom: 1px solid var(--color-accent-glow); }
+.map-control-group button:last-child { border-bottom: none; }
+.map-control-btn.active, .map-control-btn:hover { background-color: var(--color-accent-dark); color: white; }
+.leaflet-container.dark-theme { background: #1f2937; }
+.leaflet-container.light-theme { background: #d1d5db; }
+.leaflet-draw-toolbar { display: none !important; } /* Hide default Leaflet.draw toolbar */
+
+/* === Full Screen Page Modules === */
+.page { position: absolute; top: 0; left: 80px; width: calc(100vw - 80px); height: 100vh; display: flex; flex-direction: column; opacity: 0; visibility: hidden; transition: opacity 0.4s ease, transform 0.4s ease; z-index: 20; padding: 2rem; }
+#module1-screen { transform: translateX(50px); }
+#module2-screen { transform: scale(0.95); }
+#module3-globe { transform: scale(0.9); }
+#system-screen { transform: scale(1.1); }
+.page.active { opacity: 1; visibility: visible; transform: scale(1) translateX(0); }
+.nav-back { position: absolute; top: 2rem; left: 2rem; z-index: 10; color: var(--color-accent); background: none; border: none; cursor: pointer; font-size: 1rem; font-family: var(--font-heading); }
+.nav-back:hover { text-decoration: underline; }
+.module-header { position: absolute; top: 2rem; font-size: 2.5rem; } /* Shared */
+
+
+/* === Module 1: AI Assistant === */
+#module1-screen { flex-direction: row; gap: 1.5rem; padding-top: 5rem; }
+#chat-window-container { flex: 2; height: 100%; display: flex; flex-direction: column; }
+#chat-window { flex-grow: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 0.75rem; padding-right: 1rem; }
+.chat-sidebar { flex: 1; border-left: var(--panel-border); padding-left: 1.5rem; height: 100%; overflow-y: auto; }
+.chat-sidebar h1 { font-size: 1.5rem; margin-bottom: 0.5rem; }
+#chat-form { display: flex; flex-direction: column; gap: 1rem; margin-top: 1rem; }
+#chat-input { height: 120px; }
+.chat-msg-wrapper { display: flex; }
+.chat-msg-wrapper.user { justify-content: flex-end; }
+.chat-msg-wrapper.ai { justify-content: flex-start; }
+.chat-msg { max-width: 85%; padding: 0.75rem 1rem; border-radius: 10px; font-size: 0.9rem; line-height: 1.5; }
+.chat-msg.user { background-color: var(--color-accent-dark); color: white; border-bottom-right-radius: 0; }
+.chat-msg.ai { background-color: #1f2937; color: var(--color-text-secondary); border-bottom-left-radius: 0; }
+.chat-msg ul { padding-left: 1.25rem; margin-top: 0.5rem; }
+.chat-msg h4 { color: var(--color-accent); font-size: 0.9rem; margin-top: 0.75rem; }
+.video-container { position: relative; overflow: hidden; width: 100%; padding-top: 56.25%; margin-top: 0.5rem; border-radius: 8px; }
+.video-container iframe { position: absolute; top: 0; left: 0; bottom: 0; right: 0; width: 100%; height: 100%; border-radius: 0.5rem; }
+.sidebar-section { background: rgba(31, 41, 55, 0.7); border: 1px solid rgba(55, 65, 81, 0.5); border-radius: 8px; padding: 1rem; margin-top: 1.5rem; }
+.sidebar-section h2 { font-size: 1.1rem; margin-bottom: 0.75rem; padding-bottom: 0.5rem; border-bottom: 1px solid var(--color-text-dim); }
+.history-list { list-style: none; padding-left: 0; }
+.history-list li { position: relative; padding-left: 1.5rem; margin-bottom: 0.5rem; font-size: 0.9rem; color: var(--color-text-secondary); }
+.history-list li::before { content: '»'; position: absolute; left: 0; top: 0; color: var(--color-accent); font-weight: 700; }
+#toggle-advisory-btn { width: 100%; margin-top: 1.5rem; font-size: 0.9rem; }
+
+/* === Module 2: Emergency Hub === */
+#module2-screen { align-items: center; justify-content: center; text-align: center; }
+#module2-screen .module-header { color: var(--color-alert); }
+#sos-button { width: 250px; height: 250px; background-color: var(--color-alert); border-radius: 50%; border: none; color: white; font-family: var(--font-heading); font-weight: 700; cursor: pointer; display: flex; flex-direction: column; align-items: center; justify-content: center; transition: all 0.3s ease; z-index: 10; }
+#sos-text { font-size: 5rem; }
+.sos-pulse { animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
+@keyframes pulse { 0%, 100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); } 50% { transform: scale(1.05); box-shadow: 0 0 0 30px rgba(239, 68, 68, 0); } }
+.hologram-container { position: relative; width: 400px; height: 400px; display: flex; align-items: center; justify-content: center; }
+.holo-ring { position: absolute; border-radius: 50%; border: 2px solid var(--color-alert-glow); box-shadow: 0 0 15px var(--color-alert-glow); }
+.ring1 { width: 320px; height: 320px; border-width: 3px; border-style: dashed; animation: spin 20s linear infinite; }
+.ring2 { width: 380px; height: 380px; border-style: solid; opacity: 0.5; animation: spin 15s linear infinite reverse; }
+@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+
+/* === Module 3 - Globe === */
+#module3-globe {
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding-top: 5rem;
+}
+#module3-globe .module-header {
+    color: var(--color-accent);
+}
+.globe-module-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 100%;
+    gap: 2rem;
+}
+#globe-module-canvas {
+    width: 100%;
+    max-width: 500px; /* Globe size */
+    height: 500px;
+    position: relative;
+}
+#globe-module-canvas canvas {
+    width: 100% !important;
+    height: 100% !important;
+}
+.globe-module-stats {
+    width: 100%;
+    max-width: 500px;
+    background: rgba(31, 41, 55, 0.7);
+    border: 1px solid rgba(55, 65, 81, 0.5);
+}
+.globe-module-stats h2 {
+    font-size: 1.1rem;
+    margin-bottom: 1rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid var(--color-text-dim);
+}
+
+/* === Module 3 (now 4): System & Profile === */
+#system-screen { align-items: center; padding-top: 5rem; }
+.system-content-wrapper { width: 100%; max-width: 768px; height: 100%; overflow-y: auto; padding-right: 1rem; }
+.system-content-wrapper h1 { font-size: 1.5rem; margin-bottom: 1.5rem; }
+.profile-section { background: rgba(31, 41, 55, 0.7); border-radius: 8px; padding: 1.5rem; margin-bottom: 1.5rem; border: 1px solid rgba(55, 65, 81, 0.5); }
+.profile-section h2 { font-size: 1.1rem; margin-bottom: 1rem; padding-bottom: 0.5rem; border-bottom: 1px solid var(--color-text-dim); }
+.info-grid { display: grid; grid-template-columns: auto 1fr; gap: 0.5rem 1rem; font-size: 0.9rem; font-family: 'Roboto Mono', monospace; }
+.info-grid span:nth-child(odd) { color: var(--color-text-dim); }
+.info-grid span:nth-child(even) { color: var(--color-text-primary); font-weight: 500; }
+.checklist li { display: flex; align-items: center; margin-bottom: 0.75rem; }
+.checklist input[type="checkbox"] { width: 1.1rem; height: 1.1rem; accent-color: var(--color-accent); margin-right: 0.75rem; }
+#additional-contacts-form input { margin-bottom: 0.5rem; }
+#save-contacts-btn { margin-top: 1rem; }
+
+/* === Timeline (in both home and module) === */
+.timeline-item { display: flex; align-items: start; padding: 0.75rem 0; border-bottom: 1px solid rgba(55, 65, 81, 0.5); font-size: 0.9rem; }
+.timeline-item:first-child { border-top: 1px solid rgba(55, 65, 81, 0.5); }
+.timeline-icon { flex-shrink: 0; width: 1.5rem; text-align: center; margin-right: 0.75rem; }
+.timeline-content .time { font-family: 'Roboto Mono', monospace; font-size: 0.75rem; color: #9ca3af; margin-top: 0.25rem; }
+
+/* === Alert Popup === */
+#alert-popup { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.8); z-index: 50; display: flex; align-items: center; justify-content: center; }
+.alert-popup-box { background: var(--color-alert); padding: 2.5rem; border-radius: 12px; text-align: center; color: white; box-shadow: 0 0 50px var(--color-alert-glow); }
+.alert-popup-box h1 { font-size: 3rem; color: white; }
+.alert-popup-box p { font-size: 1.25rem; margin-top: 1rem; color: white; }
+#stop-alert-button { margin-top: 2rem; padding: 0.75rem 1.5rem; font-size: 1rem; background: white; color: var(--color-alert); font-weight: 700; border-radius: 8px; border: none; cursor: pointer; }
+
+/* Scrollbar styles */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background-color: var(--color-accent); border-radius: 3px; }
+/* ... (all your existing CSS) ... */
+
+/* === Module 4: Stats === */
+#module4-stats {
+    padding-top: 5rem;
+}
+.stats-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 2rem;
+    width: 100%;
+    height: calc(100% - 3rem); /* Subtract header height */
+    padding: 1rem;
+}
+.stats-chart-container {
+    background: rgba(31, 41, 55, 0.7);
+    border: 1px solid rgba(55, 65, 81, 0.5);
+    border-radius: 8px;
+    padding: 1.5rem;
+    display: flex;
+    flex-direction: column;
+}
+.stats-chart-container h2 {
+    font-size: 1.1rem;
+    margin-bottom: 1.5rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid var(--color-text-dim);
+}
+.chart-wrapper {
+    position: relative;
+    flex-grow: 1;
+    min-height: 300px; /* Ensure chart has space */
+}
+
+
+sw.js
+const CACHE_NAME = 'aegis-cache-v1';
+// All the files your app needs to work offline
+const FILES_TO_CACHE = [
+  'index.html',
+  'style.css',
+  'manifest.json',
+  'js/main.js',
+  'js/auth.js',
+  'js/actions.js',
+  'js/api.js',
+  'js/chat.js',
+  'js/globe.js',
+  'js/map.js',
+  'js/state.js',
+  'js/ui.js',
+  'https.unpkg.com/leaflet@1.9.4/dist/leaflet.css',
+  'https.unpkg.com/leaflet@1.9.4/dist/leaflet.js'
+  // You would add all other external libraries here (three.js, etc.)
+  // and any local image/font files.
+];
+
+// 1. Install the Service Worker
+self.addEventListener('install', (evt) => {
+  console.log('[ServiceWorker] Install');
+  // Pre-cache all essential app files
+  evt.waitUntil(
+    caches.open(CACHE_NAME).then((cache) => {
+      console.log('[ServiceWorker] Pre-caching offline page');
+      return cache.addAll(FILES_TO_CACHE);
+    })
+  );
+  self.skipWaiting();
+});
+
+// 2. Activate the Service Worker
+self.addEventListener('activate', (evt) => {
+  console.log('[ServiceWorker] Activate');
+  // Remove old, unused caches
+  evt.waitUntil(
+    caches.keys().then((keyList) => {
+      return Promise.all(keyList.map((key) => {
+        if (key !== CACHE_NAME) {
+          console.log('[ServiceWorker] Removing old cache', key);
+          return caches.delete(key);
+        }
+      }));
+    })
+  );
+  self.clients.claim();
+});
+
+// 3. Serve cached content
+self.addEventListener('fetch', (evt) => {
+  // Try to get from network first, then fall back to cache
+  evt.respondWith(
+    caches.match(evt.request)
+      .then((response) => {
+        return response || fetch(evt.request);
+      })
+  );
+});
+
+
+its my code for my app or website can you give a discription and ideas based on my work
